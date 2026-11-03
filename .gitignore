@@ -1,0 +1,29 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.json
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Runtime output
+logs/
+*.jsonl
+
+# Course material (not ours to redistribute)
+*.pdf
