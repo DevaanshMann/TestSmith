@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from types import SimpleNamespace
 from typing import Any
 
@@ -72,7 +73,7 @@ class FakeMessagesAPI:
         self.requests: list[dict[str, Any]] = []
 
     def create(self, **kwargs: Any) -> Any:
-        self.requests.append(kwargs)
+        self.requests.append(copy.deepcopy(kwargs))  # snapshot: callers keep mutating messages
         if not self.script:
             raise AssertionError("FakeMessagesAPI ran out of scripted responses")
         item = self.script.pop(0)
