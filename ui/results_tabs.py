@@ -153,4 +153,7 @@ def render_bugs_tab(result: SessionResult | None) -> None:
             st.warning(f"**`{bug.function_name}`** — {bug.description}", icon=":material/bug_report:")
             st.markdown("**Evidence**")
             st.code(bug.evidence, language="text")
-            st.caption(f"Reported after test run {bug.iteration}" if bug.iteration else "Reported before the first test run")
+            if bug.source == "xfail_marker":
+                st.caption("Found from the agent's xfail(BUG) marker in the final tests; the agent didn't call report_bug.")
+            else:
+                st.caption(f"Reported after test run {bug.iteration}" if bug.iteration else "Reported before the first test run")

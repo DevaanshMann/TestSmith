@@ -69,13 +69,19 @@ def _sample() -> SourceInput | None:
         return None
     default = names.index("bank_account") if "bank_account" in names else 0
     name = st.selectbox(
-        "Sample module", names, index=default,
+        "Sample module", names, index=default, key="sample_name", on_change=_clear_instructions,
         format_func=lambda n: f"{n}.py — {SAMPLE_BLURBS.get(n, '')}".rstrip(" —"),
     )
     code = (SAMPLES_DIR / f"{name}.py").read_text(encoding="utf-8")
     with st.expander(f"View {name}.py ({len(code.splitlines())} lines)"):
         st.code(code, language="python", line_numbers=True)
     return SourceInput(name, code, "sample")
+
+
+def _clear_instructions() -> None:
+    """Instructions usually name functions of one module, so don't carry them over to another sample."""
+    st.session_state.instructions = ""
+    st.session_state.example_choice = None
 
 
 def _upload(settings: Settings) -> SourceInput | None:

@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
+from testsmith.agent.bugs import unreported_bugs
 from testsmith.agent.executor import Executor, Runner
 from testsmith.agent.parser import ActionParseError, ParseContext, request_actions
 from testsmith.agent.state import IterationRecord, SessionState
@@ -173,6 +174,13 @@ class AgentLoop:
         recent = its[-(self.stall_limit + 1):]
         return not any(_progressed(prev, cur) for prev, cur in zip(recent, recent[1:]))
 
+    def _add_marker_bugs(self, state: SessionState, best: IterationRecord) -> None:
+        """Backstop: bugs documented as xfail(BUG) in the final tests but never reported."""
+        for bug in unreported_bugs(best.test_code, state.source_code, state.bugs, best.number):
+            state.bugs.append(bug)
+            self.emit({"event": "bug_inferred", "function": bug.function_name, "reason": bug.description,
+                       "source": bug.source})
+
     def _emit_iteration(self, state: SessionState) -> None:
         it = state.last
         assert it is not None
@@ -195,6 +203,8 @@ class AgentLoop:
             summary=state.finish_summary, max_iterations=state.max_iterations, stall_limit=self.stall_limit
         )
         best = state.best_iteration()
+        if best is not None:
+            self._add_marker_bugs(state, best)
         self.emit({
             "event": "session_finished",
             "stop_reason": reason,

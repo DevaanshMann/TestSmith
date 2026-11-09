@@ -201,3 +201,12 @@ def test_full_run_through_the_ui(app_with_fake_claude):
     assert "llm_call" in kinds and kinds.count("iteration") == 2
     retry = next(e for e in at.session_state["events"] if e["event"] == "llm_call")
     assert retry["outcome"] == "retry" and retry["error_kind"] == "rate_limit"
+
+
+def test_switching_samples_clears_instructions(app):
+    app.pills[0].set_value("Work incrementally").run()
+    assert "deposit()" in app.session_state["instructions"]
+    app.selectbox(key="sample_name").set_value("inventory").run()
+    assert app.session_state["instructions"] == ""
+    app.pills[0].set_value("Work incrementally").run()  # examples now use inventory's functions
+    assert "add_item()" in app.session_state["instructions"]

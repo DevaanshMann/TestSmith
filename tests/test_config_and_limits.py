@@ -50,3 +50,8 @@ def test_token_budget_raises_after_limit():
 
 def test_global_daily_budget_is_shared():
     assert global_daily_budget(1000) is global_daily_budget(1000)
+
+
+def test_empty_effort_falls_back_to_default(monkeypatch):
+    monkeypatch.setenv("TESTSMITH_EFFORT", "  ")
+    assert Settings.from_env(dotenv=False).effort == "medium"

@@ -88,21 +88,38 @@ The **best** suite (no failures, then highest coverage) is the one you get, even
 
 ## Prompt engineering techniques
 
-All prompts are versioned files in [`testsmith/prompts/`](testsmith/prompts) (`<name>_v1.md`), loaded by
+All prompts are versioned files in [`testsmith/prompts/`](testsmith/prompts) (`<name>_v<N>.md`), loaded by
 [`llm/prompts.py`](testsmith/llm/prompts.py) with `$placeholder` templates (because test code is full of `{}`).
+The active system prompt is **v2**; v1 is kept for comparison (see *Prompt iteration* below).
 
 | Technique | Where | How it's used |
 |---|---|---|
-| **Role prompting** | [`prompts/system_v1.md`](testsmith/prompts/system_v1.md) (opening) | Claude is a *senior QA engineer who writes deterministic, isolated pytest suites* and works as an autonomous agent |
-| **Explicit constraints** | `system_v1.md` → "Rules for every test file" | No network, no sleeping, no `eval`/`exec`, writes only in `tmp_path`, no mocking the code under test, `parametrize` for input tables, `pytest.raises(..., match=...)` for errors. **Enforced**, not just requested: `safety/validator.py` rejects violations and the sandbox blocks network |
+| **Role prompting** | [`prompts/system_v2.md`](testsmith/prompts/system_v2.md) (opening) | Claude is a *senior QA engineer who writes deterministic, isolated pytest suites* and works as an autonomous agent |
+| **Explicit constraints** | `system_v2.md` → "Rules for every test file" | No network, no sleeping, no `eval`/`exec`, writes only in `tmp_path`, no mocking the code under test, `parametrize` for input tables, `pytest.raises(..., match=...)` for errors. **Enforced**, not just requested: `safety/validator.py` rejects violations and the sandbox blocks network |
 | **Few-shot examples** | [`prompts/fewshot_v1.md`](testsmith/prompts/fewshot_v1.md) | Two source → plan → ideal tests pairs (a function with error cases and boundaries; a class with fixtures). Both were verified: they pass our own validator and reach 100% coverage in the sandbox |
 | **Structured output via tool schemas** | [`agent/actions.py`](testsmith/agent/actions.py) | Tool input schemas are generated from pydantic models, so the schema Claude sees and the validation we apply are the same source of truth |
-| **Chain-of-thought style planning** | `actions.py` (`WriteTests.test_plan`) + `system_v1.md` → Workflow step 2 | `write_tests` requires a structured test plan (happy path, edge cases, error cases, boundaries) placed **before** `content` in the schema, so the plan is generated before the code. The UI shows it for every run |
+| **Chain-of-thought style planning** | `actions.py` (`WriteTests.test_plan`) + `system_v2.md` → Workflow step 2 | `write_tests` requires a structured test plan (happy path, edge cases, error cases, boundaries) placed **before** `content` in the schema, so the plan is generated before the code. The UI shows it for every run |
 | **Iterative refinement with feedback** | [`prompts/iteration_feedback_v1.md`](testsmith/prompts/iteration_feedback_v1.md) + [`agent/feedback.py`](testsmith/agent/feedback.py) | After each run Claude gets pass/fail counts, trimmed tracebacks, the coverage change, every uncovered line **with its source text**, and concrete next steps |
-| **Test bug vs. source bug reasoning** | `system_v1.md` → "Test bug or source bug?" | A decision procedure: fix wrong tests; for code that contradicts its docstring/name/intent, call `report_bug` and keep the test as `xfail(strict=True)`; only report bugs when intent is clear |
+| **Test bug vs. source bug reasoning** | `system_v2.md` → "Test bug or source bug?" | A decision procedure: fix wrong tests; for code that contradicts its docstring/name/intent, keep the test as `xfail(strict=True)` and call `report_bug` in the same response; only report bugs when intent is clear. Docstring boundaries ("at or below", "at least") must be tested exactly |
 | **Self-correction loop** | [`prompts/correction_v1.md`](testsmith/prompts/correction_v1.md), [`prompts/no_tool_call_v1.md`](testsmith/prompts/no_tool_call_v1.md) | Validation errors are returned precisely (field + reason + attempt *n* of 2) |
-| **Delimiting untrusted input** | [`prompts/task_v1.md`](testsmith/prompts/task_v1.md) + `system_v1.md` → "Inputs you receive" | User instructions are wrapped in `<user_instructions>` tags; source code and its comments are treated as data, so instructions hidden in a module are ignored |
+| **Delimiting untrusted input** | [`prompts/task_v1.md`](testsmith/prompts/task_v1.md) + `system_v2.md` → "Inputs you receive" | User instructions are wrapped in `<user_instructions>` tags; source code and its comments are treated as data, so instructions hidden in a module are ignored |
 | **Stable, cacheable prefix** | `llm/client.py` | System prompt + tools are identical every turn and prompt-cached, which makes later iterations cheaper |
+
+### Prompt iteration: v1 → v2
+
+Testing on the deployed app showed that `inventory.py`'s bug sometimes didn't appear in **Bugs Found**. The cause:
+v1 said "call `report_bug`, then mark the test xfail in your *next* `write_tests`". Models often spotted the bug while
+writing tests, added the `xfail(reason="BUG: ...")` marker immediately, and skipped `report_bug`; the loop then
+stopped at `target_met` before they had another turn. With Claude Haiku 5.5 this happened in 2 of 4 runs.
+
+| | v1 ([`system_v1.md`](testsmith/prompts/system_v1.md)) | v2 ([`system_v2.md`](testsmith/prompts/system_v2.md)) |
+|---|---|---|
+| Order | `report_bug`, then xfail in the next write | xfail **and** `report_bug` **in the same response**; "every BUG marker must have a matching report" |
+| Boundaries | (implicit) | "Read every docstring as a specification… test exactly at that boundary" |
+| Haiku 5.5 reported the `inventory.py` bug | 2 / 4 runs | **4 / 4 runs** |
+
+A code-level backstop ([`agent/bugs.py`](testsmith/agent/bugs.py)) also scans the final tests for `xfail(reason="BUG…")`
+markers that were never reported and adds them to Bugs Found, so a model that skips the protocol can't hide a bug.
 
 ## Safety features
 
@@ -141,7 +158,7 @@ streamlit run app.py                                     # opens http://localhos
 ### Running the tests
 
 ```bash
-pytest                       # 168 tests, ~15 s, no API key needed (the LLM is faked)
+pytest                       # 176 tests, ~15 s, no API key needed (the LLM is faked)
 coverage run -m pytest && coverage report   # ~95% of TestSmith's own code
 ```
 
@@ -204,12 +221,13 @@ testsmith/
   config.py                   Settings from environment variables
   llm/client.py               Anthropic wrapper: retries, backoff, timeouts, budgets, usage
   llm/prompts.py              Versioned prompt loader
-  prompts/                    system, few-shot, task, feedback, correction prompts (v1)
+  prompts/                    system (v1, v2), few-shot, task, feedback, correction prompts
   agent/actions.py            Pydantic action models -> tool schemas
   agent/parser.py             Validation + self-correction loop
   agent/executor.py           Dispatches actions to handlers
   agent/loop.py               Generate -> run -> analyze -> refine, stop conditions
   agent/feedback.py           Builds the per-run feedback prompt
+  agent/bugs.py               Surfaces xfail(BUG) markers the model forgot to report
   agent/state.py, workspace.py
   sandbox/runner.py           Isolated pytest + coverage runs
   sandbox/launcher.py         Applies resource limits in the child process
@@ -221,7 +239,7 @@ testsmith/
   audit/log.py                JSONL audit log with redaction
   export/bundle.py            Zip export + RESULTS.md
 samples/                      bank_account, inventory (has a subtle bug), order_pricing, string_utils
-tests/                        168 tests, no API key needed
+tests/                        176 tests, no API key needed
 ```
 
 ## Limitations

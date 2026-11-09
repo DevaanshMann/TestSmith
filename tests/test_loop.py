@@ -221,3 +221,18 @@ def test_compress_ranges():
 def test_uncovered_section_marks_gaps():
     text = uncovered_section("a\nb\nc\nd\n", [1, 3])
     assert "   1 | a" in text and "  ..." in text and "   3 | c" in text
+
+
+def test_xfail_bug_marker_without_report_bug_is_still_surfaced():
+    tests = (
+        "import pytest\nfrom calc import sign\n\n"
+        '@pytest.mark.xfail(strict=True, reason="BUG: sign(0) should be 0")\n'
+        "def test_sign_zero():\n    assert sign(0) == 0\n"
+    )
+    loop, api, events = make_loop([write(tests), call("run_tests")], runner=fake_runner(100.0))
+    result = run_calc(loop)
+    assert result.stop_reason == "target_met"
+    assert [(b.function_name, b.source) for b in result.state.bugs] == [("sign", "xfail_marker")]
+    assert any(e["event"] == "bug_inferred" for e in events)
+    # the write_tests result also nudged the model to call report_bug
+    assert "no report_bug was called" in api.requests[1]["messages"][-1]["content"][0]["content"]

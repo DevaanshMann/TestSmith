@@ -30,6 +30,7 @@ class BugReport:
     description: str
     evidence: str
     iteration: int
+    source: str = "report_bug"  # or "xfail_marker" when inferred from the test file
 
 
 @dataclass

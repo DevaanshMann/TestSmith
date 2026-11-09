@@ -70,7 +70,7 @@ class Settings:
         """Build settings from env vars, loading .env first when present."""
         if dotenv:
             load_dotenv(override=False)
-        effort = os.getenv("TESTSMITH_EFFORT", cls.effort).strip().lower()
+        effort = (os.getenv("TESTSMITH_EFFORT") or "").strip().lower() or cls.effort
         if effort not in VALID_EFFORTS:
             raise ValueError(f"TESTSMITH_EFFORT must be one of {VALID_EFFORTS}, got {effort!r}")
         return cls(

@@ -17,6 +17,7 @@ from pathlib import PurePath
 from typing import Any, Callable
 
 from testsmith.agent.actions import Finish, ReadSource, ReportBug, RunTests, WriteTests, _Action
+from testsmith.agent.bugs import unreported_bugs
 from testsmith.agent.feedback import build_feedback
 from testsmith.agent.parser import ParsedCall
 from testsmith.agent.state import BugReport, IterationRecord, SessionState
@@ -118,6 +119,10 @@ class Executor:
         self.state.rationale = action.rationale
         n_tests = count_tests(action.content)
         message = f"Saved {action.filename}: {n_tests} test functions, {len(action.content.splitlines())} lines. Call run_tests next."
+        missing = unreported_bugs(action.content, self.state.source_code, self.state.bugs, self.state.runs_used)
+        if missing:
+            names = ", ".join(b.function_name for b in missing)
+            message += f" Note: tests are marked xfail as BUG for {names} but no report_bug was called; call report_bug now."
         return message, {"tests": n_tests}
 
     def _run_tests(self, _action: RunTests) -> tuple[str, dict[str, Any]]:
@@ -156,8 +161,8 @@ class Executor:
                 BugReport(action.function_name, action.description, action.evidence, self.state.runs_used)
             )
         return (
-            f"Bug in {action.function_name} recorded. Keep the test and mark it "
-            '@pytest.mark.xfail(strict=True, reason="BUG: ...") in your next write_tests.'
+            f"Bug in {action.function_name} recorded. Make sure its test is kept and marked "
+            '@pytest.mark.xfail(strict=True, reason="BUG: ...").'
         ), {}
 
     def _finish(self, action: Finish) -> tuple[str, dict[str, Any]]:
