@@ -76,13 +76,20 @@ class UsageTracker:
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     history: list[Usage] = field(default_factory=list)
+
+    @property
+    def total_tokens(self) -> int:
+        """Same total the token budgets are charged with."""
+        return self.input_tokens + self.output_tokens + self.cache_read_tokens + self.cache_write_tokens
 
     def add(self, usage: Usage) -> None:
         self.calls += 1
         self.input_tokens += usage.input_tokens
         self.output_tokens += usage.output_tokens
         self.cache_read_tokens += usage.cache_read_tokens
+        self.cache_write_tokens += usage.cache_write_tokens
         self.history.append(usage)
 
 
@@ -250,6 +257,7 @@ class LLMClient:
                 input_tokens=response.usage.input_tokens,
                 output_tokens=response.usage.output_tokens,
                 cache_read_tokens=response.usage.cache_read_tokens,
+                cache_write_tokens=response.usage.cache_write_tokens,
                 request_id=response.request_id,
             )
         if error is not None:

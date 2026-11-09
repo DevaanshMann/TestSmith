@@ -92,7 +92,7 @@ class Executor:
             "outcome": "error" if outcome.is_error else "ok",
             "duration_ms": int((time.monotonic() - started) * 1000),
             "summary": outcome.content[:200],
-            **{k: v for k, v in outcome.data.items() if k in ("coverage", "passed", "failed", "status", "internal_error")},
+            **{k: v for k, v in outcome.data.items() if k in ("coverage", "passed", "failed", "status", "tests", "internal_error")},
         })
         return outcome
 

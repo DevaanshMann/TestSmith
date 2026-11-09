@@ -1,0 +1,16 @@
+[client]
+# Never show raw Python tracebacks to users; the app shows friendly messages instead.
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[server]
+maxUploadSize = 1          # MB; the app enforces a stricter limit itself (TESTSMITH_MAX_UPLOAD_BYTES)
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2f6fdb"
+font = "sans serif"
