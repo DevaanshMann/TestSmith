@@ -1,0 +1,1 @@
+You replied without calling a tool. Every turn must call at least one of: read_source, write_tests, run_tests, report_bug, finish. Use `finish` if you believe the work is complete. This is correction attempt $attempt of $max_attempts.
