@@ -1,9 +1,12 @@
-"""Run tab: choose source + instructions, start the agent, watch it, and review each step."""
+"""Run tab: choose source + instructions, start the agent, watch it, and review each step.
+
+Start flow: source checks -> confirmations (if needed) -> concurrency slot -> rate limits -> run.
+Every refusal and decision is written to the audit log.
+"""
 
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 import streamlit as st
@@ -12,11 +15,24 @@ from testsmith.agent.loop import AgentLoop, SessionResult
 from testsmith.agent.state import IterationRecord
 from testsmith.config import has_credentials
 from testsmith.llm.client import LLMClient
+from testsmith.safety.confirmations import request_fingerprint, required_confirmations
+from testsmith.safety.limits import BusyError, RateLimitedError
 from testsmith.sandbox.runner import SandboxInputError
+from ui.confirm import render_confirmation_panel
 from ui.describe import describe, iteration_line, missing_text
 from ui.inputs import SourceInput, check_source, render_instructions, render_source_picker
 from ui.live import LiveView
-from ui.session import RunOptions, base_settings, daily_budget, flash, run_settings, show_flash
+from ui.session import (
+    RunOptions,
+    audit,
+    base_settings,
+    daily_budget,
+    flash,
+    gate,
+    global_limiter,
+    run_settings,
+    show_flash,
+)
 
 STOP_STYLE = {
     "target_met": "success",
@@ -43,37 +59,64 @@ def render_run_tab(options: RunOptions) -> None:
         )
 
     show_flash()
-    if start and source is not None:
-        _start_run(source, options)
+    if source is not None:
+        fingerprint = request_fingerprint(source.module_name, source.code, options, st.session_state.instructions)
+        if start:
+            _on_generate(source, options, fingerprint)
+        if render_confirmation_panel(fingerprint):
+            _launch(source, options)
     render_result(st.session_state.result)
 
 
-# ---- running -----------------------------------------------------------------
+# ---- starting a run ------------------------------------------------------------
 
 
-def _start_run(source: SourceInput, options: RunOptions) -> None:
+def _on_generate(source: SourceInput, options: RunOptions, fingerprint: str) -> None:
     settings = run_settings(options)
     check = check_source(source, settings)
-    for error in check.errors:
-        st.error(error)
     if not check.ok:
+        for error in check.errors:
+            st.error(error)
+        audit({"event": "run_refused", "reason": "invalid_source", "errors": check.errors})
         return
-    if check.warnings:
-        st.warning(
-            "This source uses risky operations (shown below). Tests run in a sandbox, "
-            "but please make sure you trust this code.\n\n" + "\n".join(f"- {w}" for w in check.warnings)
-        )
+    requests = required_confirmations(
+        source_findings=check.warnings,
+        max_iterations=options.max_iterations,
+        default_max_iterations=base_settings().max_iterations,
+        has_user_edits=st.session_state.edited_tests is not None,
+    )
+    if requests:
+        st.session_state.pending = {"fingerprint": fingerprint, "requests": requests}
+        audit({"event": "confirmation_requested", "kinds": [r.kind.value for r in requests],
+               "findings": [str(f) for f in check.warnings[:10]]})
+        return
+    _launch(source, options)
 
+
+def _launch(source: SourceInput, options: RunOptions) -> None:
+    try:
+        with gate().slot():
+            st.session_state.run_limiter.acquire()
+            global_limiter().acquire()
+            _execute(source, options)
+    except RateLimitedError as exc:
+        st.error(str(exc))
+        audit({"event": "run_refused", "reason": "rate_limited", "scope": exc.scope})
+    except BusyError as exc:
+        st.warning(str(exc))
+        audit({"event": "run_refused", "reason": "busy"})
+
+
+def _execute(source: SourceInput, options: RunOptions) -> None:
+    settings = run_settings(options)
     live = LiveView(options.coverage_target, options.max_iterations)
     run_id = st.session_state.run_count + 1
-    events: list[dict[str, Any]] = st.session_state.events
 
     def on_event(event: dict[str, Any]) -> None:
-        event = {"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
-                 "session_id": st.session_state.session_id, "run": run_id, **event}
-        events.append(event)
-        live.handle(event)
+        live.handle(audit(event, run=run_id))
 
+    on_event({"event": "run_requested", "module": source.filename, "origin": source.origin,
+              "instructions": st.session_state.instructions, "model": settings.model, "effort": settings.effort})
     llm = LLMClient(settings, budgets=[st.session_state.session_budget, daily_budget()], on_call=on_event)
     loop = AgentLoop(llm, settings, on_event=on_event)
     started = time.monotonic()
@@ -90,7 +133,7 @@ def _start_run(source: SourceInput, options: RunOptions) -> None:
         st.error(str(exc))
         return
     except Exception as exc:  # noqa: BLE001 - never show a traceback; keep details in the audit log
-        on_event({"event": "internal_error", "error": f"{type(exc).__name__}: {exc}"[:500]})
+        on_event({"event": "internal_error", "error": f"{type(exc).__name__}: {exc}"})
         live.finish("Something went wrong", error=True)
         st.error("Something unexpected went wrong while running the agent. Details were saved to the audit log.")
         return
@@ -98,8 +141,9 @@ def _start_run(source: SourceInput, options: RunOptions) -> None:
     st.session_state.result = result
     st.session_state.last_source = source
     st.session_state.run_count = run_id
-    kind = STOP_STYLE.get(result.stop_reason, "info")
-    flash(kind, f"{result.message} (took {time.monotonic() - started:.0f}s)")
+    st.session_state.edited_tests = None  # replaced by the new suite (the user confirmed this)
+    st.session_state.user_run = None
+    flash(STOP_STYLE.get(result.stop_reason, "info"), f"{result.message} (took {time.monotonic() - started:.0f}s)")
     st.rerun()
 
 

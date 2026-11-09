@@ -9,8 +9,16 @@ from typing import Any
 
 import streamlit as st
 
+from testsmith.audit.log import AuditLogger
 from testsmith.config import Settings
-from testsmith.safety.limits import TokenBudget, global_daily_budget
+from testsmith.safety.limits import (
+    ConcurrencyGate,
+    SlidingWindowLimiter,
+    TokenBudget,
+    concurrency_gate,
+    global_daily_budget,
+    global_run_limiter,
+)
 
 MODEL_CHOICES = {
     "claude-sonnet-5-5": "Claude Sonnet 5.5 (balanced, default)",
@@ -51,23 +59,45 @@ def base_settings() -> Settings:
 
 
 def init_session() -> None:
-    """Create per-session defaults once."""
+    """Create per-session defaults. Fills in any missing key, so sessions survive app upgrades."""
     state = st.session_state
-    if "session_id" in state:
-        return
     settings = base_settings()
-    state.session_id = uuid.uuid4().hex[:12]
-    state.session_budget = TokenBudget(settings.session_token_budget, scope="session")
-    state.events = []          # every event of every run in this session (audit tab)
-    state.result = None        # SessionResult of the last run
-    state.last_source = None   # SourceInput of the last run
-    state.run_count = 0
-    state.flash = None         # (kind, message) shown once after a rerun
-    state.instructions = ""
+    if "session_id" not in state:
+        state.session_id = uuid.uuid4().hex[:12]
+    defaults: dict[str, Any] = {
+        "session_budget": lambda: TokenBudget(settings.session_token_budget, scope="session"),
+        "run_limiter": lambda: SlidingWindowLimiter(settings.max_runs_per_session_per_hour, 3600, scope="this session"),
+        "audit": lambda: AuditLogger(settings.audit_log_path, state.session_id),
+        "pending": lambda: None,       # run request waiting for confirmation
+        "edited_tests": lambda: None,  # user's edited version of the final tests
+        "user_run": lambda: None,      # RunResult of the user's edited tests
+        "result": lambda: None,        # SessionResult of the last run
+        "last_source": lambda: None,
+        "run_count": lambda: 0,
+        "flash": lambda: None,         # (kind, message) shown once after a rerun
+        "instructions": lambda: "",
+    }
+    for key, make in defaults.items():
+        if key not in state:
+            state[key] = make()
+    state.events = state.audit.records  # same list: every event of every run in this session
 
 
 def daily_budget() -> TokenBudget:
     return global_daily_budget(base_settings().daily_token_budget)
+
+
+def global_limiter() -> SlidingWindowLimiter:
+    return global_run_limiter(base_settings().max_runs_per_hour_global)
+
+
+def gate() -> ConcurrencyGate:
+    return concurrency_gate(base_settings().max_concurrent_runs)
+
+
+def audit(event: dict[str, Any], **context: Any) -> dict[str, Any]:
+    """Record an event in this session's audit log (file + memory)."""
+    return st.session_state.audit.record(event, **context)
 
 
 def run_settings(options: RunOptions) -> Settings:

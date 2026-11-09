@@ -74,7 +74,8 @@ class Executor:
         """Run one validated action. Never raises for expected failures."""
         assert call.action is not None, "only validated calls may be executed"
         action = call.action
-        self.on_event({"event": "action_started", "tool": call.name, "args": summarize_args(action)})
+        args = summarize_args(action)
+        self.on_event({"event": "action_started", "tool": call.name, "args": args})
         started = time.monotonic()
         try:
             content, data = self._handlers[type(action)](action)
@@ -89,6 +90,8 @@ class Executor:
         self.on_event({
             "event": "action_finished",
             "tool": call.name,
+            "args": args,
+            "validation": "passed",  # only validated calls reach the executor; rejections are logged by the parser
             "outcome": "error" if outcome.is_error else "ok",
             "duration_ms": int((time.monotonic() - started) * 1000),
             "summary": outcome.content[:200],

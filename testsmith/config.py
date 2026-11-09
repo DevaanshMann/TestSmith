@@ -60,6 +60,8 @@ class Settings:
     session_token_budget: int = 250_000
     daily_token_budget: int = 3_000_000
     max_runs_per_session_per_hour: int = 6
+    max_runs_per_hour_global: int = 60
+    max_concurrent_runs: int = 2
 
     audit_log_path: Path = Path("logs/audit.jsonl")
 
@@ -84,6 +86,9 @@ class Settings:
             max_upload_bytes=_env_int("TESTSMITH_MAX_UPLOAD_BYTES", cls.max_upload_bytes, 1),
             session_token_budget=_env_int("TESTSMITH_SESSION_TOKEN_BUDGET", cls.session_token_budget, 1),
             daily_token_budget=_env_int("TESTSMITH_DAILY_TOKEN_BUDGET", cls.daily_token_budget, 1),
+            max_runs_per_session_per_hour=_env_int("TESTSMITH_RUNS_PER_SESSION_HOUR", cls.max_runs_per_session_per_hour, 1),
+            max_runs_per_hour_global=_env_int("TESTSMITH_RUNS_PER_HOUR", cls.max_runs_per_hour_global, 1),
+            max_concurrent_runs=_env_int("TESTSMITH_MAX_CONCURRENT_RUNS", cls.max_concurrent_runs, 1),
             audit_log_path=Path(os.getenv("TESTSMITH_AUDIT_LOG", str(cls.audit_log_path))),
         )
 
