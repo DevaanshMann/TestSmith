@@ -21,9 +21,9 @@ from testsmith.safety.limits import (
 )
 
 MODEL_CHOICES = {
-    "claude-sonnet-5-5": "Claude Sonnet 5.5 (balanced, default)",
-    "claude-opus-5-5": "Claude Opus 5.5 (most capable, costlier)",
-    "claude-haiku-5-5": "Claude Haiku 5.5 (fastest, cheapest)",
+    "claude-sonnet-5-5": "Sonnet 5.5 · balanced",
+    "claude-opus-5-5": "Opus 5.5 · most capable",
+    "claude-haiku-5-5": "Haiku 5.5 · fastest",
 }
 EFFORT_CHOICES = ("low", "medium", "high")
 

@@ -10,7 +10,27 @@ enableXsrfProtection = true
 [browser]
 gatherUsageStats = false
 
+# Dark "code editor" theme. Green is the passing-test accent.
 [theme]
-base = "light"
-primaryColor = "#2f6fdb"
-font = "sans serif"
+base = "dark"
+primaryColor = "#238636"
+backgroundColor = "#0d1117"
+secondaryBackgroundColor = "#161b22"
+textColor = "#e6edf3"
+borderColor = "#30363d"
+linkColor = "#58a6ff"
+codeBackgroundColor = "#0b0f14"
+greenColor = "#3fb950"
+blueColor = "#58a6ff"
+redColor = "#f85149"
+orangeColor = "#d29922"
+baseRadius = "0.6rem"
+showWidgetBorder = true
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap, monospace"
+codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap, monospace"
+
+[theme.sidebar]
+backgroundColor = "#010409"
+secondaryBackgroundColor = "#0d1117"
+borderColor = "#21262d"

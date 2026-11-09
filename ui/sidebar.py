@@ -6,12 +6,13 @@ import streamlit as st
 
 from testsmith.config import has_credentials
 from ui.session import EFFORT_CHOICES, MODEL_CHOICES, RunOptions, base_settings, daily_budget
+from ui.theme import sidebar_brand
 
 
 def render_sidebar() -> RunOptions:
     settings = base_settings()
     with st.sidebar:
-        st.header("Settings")
+        sidebar_brand()
         coverage_target = st.slider(
             "Coverage target (%)", min_value=50, max_value=100, value=settings.coverage_target, step=5,
             help="The agent stops once line coverage reaches this and no tests fail.",
@@ -45,6 +46,6 @@ def _render_status() -> None:
     session = st.session_state.session_budget
     daily = daily_budget()
     st.caption("Token budget")
-    st.progress(min(1.0, session.used / session.limit), text=f"This session: {session.used:,} / {session.limit:,}")
-    st.progress(min(1.0, daily.used / daily.limit), text=f"Today, all users: {daily.used:,} / {daily.limit:,}")
+    st.progress(min(1.0, session.used / session.limit), text=f"Session · {session.used / 1000:,.0f}k / {session.limit / 1000:,.0f}k")
+    st.progress(min(1.0, daily.used / daily.limit), text=f"All users today · {daily.used / 1000:,.0f}k / {daily.limit / 1000:,.0f}k")
     st.caption(f"Session `{st.session_state.session_id}`")

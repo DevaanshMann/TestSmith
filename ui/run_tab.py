@@ -22,6 +22,7 @@ from ui.confirm import render_confirmation_panel
 from ui.describe import describe, iteration_line, missing_text
 from ui.inputs import SourceInput, check_source, render_instructions, render_source_picker
 from ui.live import LiveView
+from ui.theme import coverage_meter, empty_state, section
 from ui.session import (
     RunOptions,
     audit,
@@ -48,9 +49,11 @@ STOP_STYLE = {
 def render_run_tab(options: RunOptions) -> None:
     settings = base_settings()
     left, right = st.columns([3, 2], gap="large")
-    with left:
+    with left, st.container(border=True):
+        section("01", "source", "Pick a sample, upload a .py file, or paste code.")
         source = render_source_picker(settings)
-    with right:
+    with right, st.container(border=True):
+        section("02", "instructions", "Optional: tell the agent what to focus on.")
         render_instructions(source)
         start = st.button(
             "Generate tests", type="primary", icon=":material/play_arrow:", width="stretch",
@@ -152,12 +155,12 @@ def _execute(source: SourceInput, options: RunOptions) -> None:
 
 def render_result(result: SessionResult | None) -> None:
     if result is None:
-        st.info("Pick a sample, upload, or paste a Python module, then click **Generate tests**.", icon=":material/info:")
+        empty_state()
         return
     state = result.state
     best = result.best
 
-    st.subheader(f"Results for `{state.module_file}`")
+    section("03", "results", f"{state.module_file} · {state.runs_used} test run(s) · stopped: {result.stop_reason.replace('_', ' ')}")
     first_cov = state.iterations[0].run.coverage_percent if state.iterations else None
     final_cov = best.run.coverage_percent if best else 0.0
     cols = st.columns(5)
@@ -167,13 +170,13 @@ def render_result(result: SessionResult | None) -> None:
     cols[2].metric("Test runs", f"{state.runs_used} / {state.max_iterations}")
     cols[3].metric("Bugs found", len(state.bugs))
     cols[4].metric("Tokens", f"{result.usage.total_tokens:,}", help="Input, output, and prompt-cache tokens")
-    st.progress(min(1.0, final_cov / 100), text=f"Final coverage {final_cov:.1f}% (target {state.coverage_target}%)")
+    coverage_meter(final_cov, state.coverage_target, label=f"final line coverage · {state.module_file}")
 
     if state.bugs:
         st.warning(f"TestSmith found {len(state.bugs)} likely bug(s) in the source. See the **Bugs Found** tab.",
                    icon=":material/bug_report:")
 
-    st.markdown("#### Agent steps")
+    section("04", "agent steps", "One card per test run: what the agent did, its plan, and what the run showed.")
     buckets = _steps_by_iteration(st.session_state.events, st.session_state.run_count)
     for it in state.iterations:
         _render_iteration(it, buckets.get(it.number, []), is_best=best is not None and it.number == best.number)
@@ -193,24 +196,31 @@ def _render_iteration(it: IterationRecord, steps: list[str], is_best: bool) -> N
     with st.expander(label, icon=icon, expanded=is_best):
         st.progress(min(1.0, run.coverage_percent / 100), text=f"Coverage {run.coverage_percent:.1f}%"
                     + ("" if it.coverage_delta is None else f" ({it.coverage_delta:+.1f} vs previous run)"))
-        st.markdown("**Actions**")
+        _label("actions")
         for line in steps:
             st.markdown(f"- {line}")
         if it.test_plan:
-            st.markdown("**Test plan**")
+            _label("test plan")
             plan = it.test_plan
             plan_cols = st.columns(4)
             for col, (title, items) in zip(plan_cols, [("Happy path", plan.happy_path), ("Edge cases", plan.edge_cases),
                                                        ("Error cases", plan.error_cases), ("Boundaries", plan.boundaries)]):
                 col.markdown(f"*{title}*\n" + "\n".join(f"- {i}" for i in items) if items else f"*{title}*\n- —")
         if it.rationale:
-            st.markdown(f"**Rationale:** {it.rationale}")
-        st.markdown(f"**Uncovered lines:** {missing_text(run.missing_lines)}")
+            _label("rationale")
+            st.markdown(it.rationale)
+        _label("uncovered lines")
+        st.markdown(f"`{missing_text(run.missing_lines)}`")
         for failure in run.failures:
-            st.markdown(f"**Failure:** `{failure.test_id}`")
+            _label("failure")
+            st.markdown(f"`{failure.test_id}`")
             st.code(failure.traceback, language="text")
         if run.status in ("collection_error", "crashed", "timeout") and run.output_tail:
             st.code(run.output_tail[-1500:], language="text")
+
+
+def _label(text: str) -> None:
+    st.markdown(f'<div class="ts-label">// {text}</div>', unsafe_allow_html=True)
 
 
 def _steps_by_iteration(events: list[dict[str, Any]], run_id: int) -> dict[int | None, list[str]]:

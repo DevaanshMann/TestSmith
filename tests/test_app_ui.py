@@ -37,7 +37,9 @@ def generate(at):
 
 def test_app_loads_without_errors(app):
     assert not app.exception
-    assert [t.label for t in app.tabs] == ["Run", "Final Tests", "Bugs Found", "Audit Log", "About"]
+    labels = [t.label for t in app.tabs]
+    assert [label.split(" ", 1)[1] for label in labels] == ["Run", "Final Tests", "Bugs Found", "Audit Log", "About"]
+    assert all(label.startswith(":material/") for label in labels)
 
 
 def test_extra_iterations_need_confirmation_and_cancel_is_logged(app):
@@ -193,7 +195,7 @@ def test_full_run_through_the_ui(app_with_fake_claude):
     steps = " ".join(m.value for m in at.markdown)
     assert "Rejected `write_tests`" in steps          # validation failure shown to the user
     assert "Reported a likely bug" in steps
-    assert any(t.label.startswith("Bugs Found (1)") for t in at.tabs)
+    assert any(t.label.endswith("Bugs Found (1)") for t in at.tabs)
     assert any("sign" in w.value for w in at.warning)  # bug card in Bugs Found tab
     assert any(c.value == V2.rstrip() for c in at.code)  # final tests shown (st.code drops the final newline)
 

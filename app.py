@@ -14,18 +14,24 @@ from ui.audit_tab import render_audit_tab  # noqa: E402
 from ui.results_tabs import render_bugs_tab, render_final_tests_tab  # noqa: E402
 from ui.run_tab import render_run_tab  # noqa: E402
 from ui.sidebar import render_sidebar  # noqa: E402
+from ui.theme import footer, hero, inject_css  # noqa: E402
 
 
 def main() -> None:
     init_session()
+    inject_css()
     options = render_sidebar()
-
-    st.title("TestSmith")
-    st.caption("An AI agent that writes pytest suites, runs them, and refines them until your coverage target is met.")
+    hero()
 
     result = st.session_state.result
     bug_count = len(result.state.bugs) if result else 0
-    tabs = st.tabs(["Run", "Final Tests", f"Bugs Found ({bug_count})" if bug_count else "Bugs Found", "Audit Log", "About"])
+    tabs = st.tabs([
+        ":material/terminal: Run",
+        ":material/code: Final Tests",
+        f":material/bug_report: Bugs Found ({bug_count})" if bug_count else ":material/bug_report: Bugs Found",
+        ":material/receipt_long: Audit Log",
+        ":material/info: About",
+    ])
     with tabs[0]:
         render_run_tab(options)
     with tabs[1]:
@@ -36,6 +42,7 @@ def main() -> None:
         render_audit_tab()
     with tabs[4]:
         render_about_tab()
+    footer()
 
 
 main()
