@@ -231,7 +231,6 @@ def sidebar_brand() -> None:
 
 def footer() -> None:
     st.markdown(
-        '<div class="ts-footer">built with <b>Claude</b> · <b>pytest</b> · <b>coverage.py</b> · <b>Streamlit</b>'
-        " &nbsp;|&nbsp; CS4680 Prompt Engineering</div>",
+        '<div class="ts-footer">built by <b>Devaansh Mann</b></div>',
         unsafe_allow_html=True,
     )

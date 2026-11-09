@@ -45,7 +45,8 @@ def _render_status() -> None:
 
     session = st.session_state.session_budget
     daily = daily_budget()
-    st.caption("Token budget")
-    st.progress(min(1.0, session.used / session.limit), text=f"Session · {session.used / 1000:,.0f}k / {session.limit / 1000:,.0f}k")
-    st.progress(min(1.0, daily.used / daily.limit), text=f"All users today · {daily.used / 1000:,.0f}k / {daily.limit / 1000:,.0f}k")
+    st.caption("Token budget · this session")
+    st.progress(min(1.0, session.used / session.limit), text=f"{session.used:,} / {session.limit:,} tokens")
+    st.caption("Token budget · all users today")
+    st.progress(min(1.0, daily.used / daily.limit), text=f"{daily.used:,} / {daily.limit:,} tokens")
     st.caption(f"Session `{st.session_state.session_id}`")
