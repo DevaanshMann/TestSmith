@@ -53,7 +53,7 @@ class Settings:
 
     sandbox_timeout_s: int = 20
     sandbox_cpu_s: int = 30
-    sandbox_memory_mb: int = 512
+    sandbox_memory_mb: int = 256    # per test run; keep (max_concurrent_runs x this) under the host's RAM
     sandbox_file_size_mb: int = 10
 
     max_upload_bytes: int = 51_200
@@ -83,6 +83,7 @@ class Settings:
             llm_max_retries=_env_int("TESTSMITH_LLM_MAX_RETRIES", cls.llm_max_retries, 0),
             refusal_fallback=_env_bool("TESTSMITH_REFUSAL_FALLBACK", cls.refusal_fallback),
             sandbox_timeout_s=_env_int("TESTSMITH_SANDBOX_TIMEOUT", cls.sandbox_timeout_s, 1),
+            sandbox_memory_mb=_env_int("TESTSMITH_SANDBOX_MEMORY_MB", cls.sandbox_memory_mb, 64),
             max_upload_bytes=_env_int("TESTSMITH_MAX_UPLOAD_BYTES", cls.max_upload_bytes, 1),
             session_token_budget=_env_int("TESTSMITH_SESSION_TOKEN_BUDGET", cls.session_token_budget, 1),
             daily_token_budget=_env_int("TESTSMITH_DAILY_TOKEN_BUDGET", cls.daily_token_budget, 1),

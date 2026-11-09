@@ -1,0 +1,27 @@
+# Secrets: never bake into the image (set them as environment variables on the host)
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Local tooling and runtime output
+.git
+.gitignore
+.venv
+venv
+.idea
+.vscode
+.DS_Store
+logs
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+coverage.json
+*.pdf
+
+# Not needed at runtime
+tests
+Dockerfile
+.dockerignore
+render.yaml

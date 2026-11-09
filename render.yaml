@@ -1,0 +1,26 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo.
+# You'll be asked for ANTHROPIC_API_KEY (it is never stored in the repo).
+services:
+  - type: web
+    name: testsmith
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /_stcore/health
+    autoDeploy: true
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false            # prompts for the value; not committed
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5-5
+      - key: TESTSMITH_EFFORT
+        value: medium
+      - key: TESTSMITH_SESSION_TOKEN_BUDGET
+        value: "250000"
+      - key: TESTSMITH_DAILY_TOKEN_BUDGET
+        value: "3000000"
+      - key: TESTSMITH_MAX_CONCURRENT_RUNS
+        value: "2"
+      - key: TESTSMITH_SANDBOX_MEMORY_MB   # free plan has 512 MB: 2 runs x 192 MB + app fits
+        value: "192"
