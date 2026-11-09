@@ -50,6 +50,28 @@ def test_unusual_exceptions_map_to_friendly_errors(exc, kind):
     assert error.kind == kind and error.user_message
 
 
+@pytest.mark.parametrize("status", [400, 402])
+def test_out_of_credits_has_a_clear_message_and_is_not_retried(status):
+    response = httpx2.Response(status, request=REQ)
+    error = anthropic.APIStatusError(
+        "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.",
+        response=response, body=None,
+    )
+    api = FakeMessagesAPI([error])
+    sleeps: list[float] = []
+    client = LLMClient(Settings(), messages_api=api, sleep=sleeps.append, rng=random.Random(0))
+    with pytest.raises(LLMError) as info:
+        client.create_message(system="s", messages=[{"role": "user", "content": "x"}])
+    assert info.value.kind == "credits"
+    assert info.value.user_message.startswith("API credits have run out!")
+    assert sleeps == [] and len(api.requests) == 1  # retrying wouldn't help
+
+
+def test_other_bad_requests_are_unchanged():
+    error = anthropic.BadRequestError("max_tokens: too large", response=httpx2.Response(400, request=REQ), body=None)
+    assert map_exception(error).kind == "bad_request"
+
+
 def test_unparseable_retry_after_falls_back_to_backoff():
     response = httpx2.Response(429, request=REQ, headers={"retry-after": "soon"})
     api = FakeMessagesAPI([anthropic.RateLimitError("rl", response=response, body=None), text_message("ok")])

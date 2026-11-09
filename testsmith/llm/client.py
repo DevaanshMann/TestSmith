@@ -307,6 +307,12 @@ def map_exception(exc: Exception) -> LLMError:
         return LLMError("rate_limit", "Rate limited by the API. Backing off and retrying…", retryable=True, detail=detail)
     if isinstance(exc, anthropic.APIStatusError):
         status = exc.status_code
+        if status == 402 or (status == 400 and "credit balance" in detail.lower()):
+            return LLMError(
+                "credits",
+                "API credits have run out! TestSmith can't call Claude until more credits are added to the account.",
+                detail=detail,
+            )
         if status == 529:
             return LLMError("overloaded", "The API is overloaded right now. Retrying…", retryable=True, detail=detail)
         if status >= 500 or status in _RETRYABLE_STATUSES:

@@ -158,7 +158,7 @@ streamlit run app.py                                     # opens http://localhos
 ### Running the tests
 
 ```bash
-pytest                       # 176 tests, ~15 s, no API key needed (the LLM is faked)
+pytest                       # 179 tests, ~15 s, no API key needed (the LLM is faked)
 coverage run -m pytest && coverage report   # ~95% of TestSmith's own code
 ```
 
@@ -239,7 +239,7 @@ testsmith/
   audit/log.py                JSONL audit log with redaction
   export/bundle.py            Zip export + RESULTS.md
 samples/                      bank_account, inventory (has a subtle bug), order_pricing, string_utils
-tests/                        176 tests, no API key needed
+tests/                        179 tests, no API key needed
 ```
 
 ## Limitations
