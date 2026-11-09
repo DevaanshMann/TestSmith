@@ -7,3 +7,14 @@ requires-python = ">=3.11"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.run]
+source = ["testsmith", "ui"]
+# These two files only ever execute inside the sandbox's child process, where the
+# parent's coverage measurement can't see them. tests/test_runner.py exercises them
+# end to end (limits applied, network blocked, timeouts).
+omit = ["testsmith/sandbox/launcher.py", "testsmith/sandbox/sitecustomize_guard.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

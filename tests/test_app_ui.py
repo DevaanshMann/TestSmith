@@ -124,3 +124,80 @@ def test_audit_file_is_written(app, tmp_path):
     text = (tmp_path / "audit.jsonl").read_text()
     assert '"run_refused"' in text and app.session_state["session_id"] in text
     assert "sk-ant-test-not-used" not in text
+
+
+# ---- full run through the UI with a scripted fake Claude ---------------------------------
+
+CALC = "def add(a, b):\n    return a + b\n\ndef sign(x):\n    if x < 0:\n        return -1\n    return 1\n"
+V1 = "from calc import add\n\ndef test_add():\n    assert add(1, 2) == 3\n"
+V2 = V1 + "\nfrom calc import sign\n\ndef test_sign():\n    assert sign(-5) == -1\n    assert sign(5) == 1\n"
+PLAN = {"happy_path": ["add numbers"], "edge_cases": ["negative input"]}
+
+
+def fake_claude_script():
+    from tests.fakes import api_error, tool_message
+
+    def write(content, filename="test_calc.py", tid="w"):
+        return tool_message("write_tests", {"filename": filename, "test_plan": PLAN,
+                                            "rationale": "Cover more of the module.", "content": content}, tool_id=tid)
+
+    bug = {"function_name": "sign", "description": "sign(0) returns 1 but zero has no sign",
+           "evidence": "sign(0) == 1"}
+    return [
+        api_error(429, retry_after="0"),                       # rate limited once, then retried
+        tool_message("read_source", {"path": "calc.py"}, tool_id="r"),
+        write(V1, filename="tests.py", tid="bad"),             # invalid -> sent back for correction
+        write(V1, tid="w1"),
+        tool_message("run_tests", {}, tool_id="run1"),
+        tool_message("report_bug", bug, tool_id="b"),
+        write(V2, tid="w2"),
+        tool_message("run_tests", {}, tool_id="run2"),
+    ]
+
+
+@pytest.fixture
+def app_with_fake_claude(tmp_path, monkeypatch):
+    from testsmith.llm.client import LLMClient
+    from tests.fakes import FakeMessagesAPI
+
+    api = FakeMessagesAPI(fake_claude_script())
+    monkeypatch.setattr(LLMClient, "_build_sdk", staticmethod(lambda settings: api))
+    monkeypatch.setenv("TESTSMITH_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-not-used")
+    st.cache_resource.clear()
+    at = AppTest.from_file(APP, default_timeout=120).run()
+    yield at, api
+    st.cache_resource.clear()
+
+
+def test_full_run_through_the_ui(app_with_fake_claude):
+    at, api = app_with_fake_claude
+    at.segmented_control[0].set_value("Paste").run()
+    at.text_input[0].set_value("calc").run()
+    at.text_area[0].set_value(CALC).run()
+    generate(at)
+
+    assert not at.exception
+    assert api.script == []  # every scripted response was used
+    assert any("Coverage target reached" in s.value for s in at.success)
+
+    metrics = {m.label: (m.value, m.delta) for m in at.metric}
+    assert metrics["Coverage"] == ("100.0%", "+50.0 pts")
+    assert metrics["Test runs"][0] == "2 / 5"
+    assert metrics["Bugs found"][0] == "1"
+
+    labels = [e.label for e in at.expander]
+    assert any(label.startswith("Run 1 — coverage 50.0%") for label in labels)
+    assert any(label.startswith("Run 2 — coverage 100.0%") and "best" in label for label in labels)
+
+    steps = " ".join(m.value for m in at.markdown)
+    assert "Rejected `write_tests`" in steps          # validation failure shown to the user
+    assert "Reported a likely bug" in steps
+    assert any(t.label.startswith("Bugs Found (1)") for t in at.tabs)
+    assert any("sign" in w.value for w in at.warning)  # bug card in Bugs Found tab
+    assert any(c.value == V2.rstrip() for c in at.code)  # final tests shown (st.code drops the final newline)
+
+    kinds = [e["event"] for e in at.session_state["events"]]
+    assert "llm_call" in kinds and kinds.count("iteration") == 2
+    retry = next(e for e in at.session_state["events"] if e["event"] == "llm_call")
+    assert retry["outcome"] == "retry" and retry["error_kind"] == "rate_limit"
